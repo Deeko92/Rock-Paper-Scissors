@@ -1,6 +1,6 @@
 // sw.js — minimal cache-first service worker so the app works offline once
 // loaded. Bump CACHE when files change to force a refresh.
-const CACHE = 'rps-cache-v2';
+const CACHE = 'rps-cache-v3';
 const ASSETS = [
   './',
   './index.html',

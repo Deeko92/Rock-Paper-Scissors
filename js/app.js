@@ -381,6 +381,12 @@ function renderHistory() {
             toast('Name saved');
           },
         }),
+        el('button', {
+          class: 'del-player',
+          text: '🗑',
+          title: 'Delete player',
+          onclick: () => deletePlayer(p),
+        }),
       ])
     );
   });
@@ -483,6 +489,36 @@ const PLAYER_PALETTE = ['#0ea5e9', '#f97316', '#a855f7', '#22c55e', '#eab308', '
 function playerColor(id) {
   const idx = state.data.players.findIndex((p) => p.id === id);
   return PLAYER_PALETTE[(idx < 0 ? 0 : idx) % PLAYER_PALETTE.length];
+}
+
+// Remove a player. Keeps at least 2 players, and warns before orphaning any
+// games the player already appears in (those stay in history as "(removed
+// player)" since stats are derived from the raw games).
+function deletePlayer(p) {
+  if (state.data.players.length <= 2) {
+    toast('You need at least 2 players');
+    return;
+  }
+  const gameCount = state.data.games.filter(
+    (g) => g.playerIds.includes(p.id) || g.winnerId === p.id
+  ).length;
+  if (gameCount > 0) {
+    const ok = confirm(
+      `${p.name} has ${gameCount} recorded game${gameCount === 1 ? '' : 's'}. ` +
+      'Delete this player anyway? Their past games stay in history but will show as "(removed player)".'
+    );
+    if (!ok) return;
+  }
+  state.data.players = state.data.players.filter((x) => x.id !== p.id);
+  // Fix up Play-screen selections if they pointed at the deleted player.
+  if (state.aId === p.id || state.bId === p.id) {
+    state.aId = state.data.players[0].id;
+    state.bId = state.data.players[1] ? state.data.players[1].id : state.data.players[0].id;
+    state.game = null;
+  }
+  persist();
+  toast('Player deleted');
+  renderHistory();
 }
 
 function listCard() {

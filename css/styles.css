@@ -144,6 +144,11 @@ main { padding: 8px 14px 24px; max-width: 640px; margin: 0 auto; }
 .name-edit-row input {
   flex: 1; padding: 10px; border-radius: 8px; border: none; background: var(--panel-2); color: var(--text); font-size: 1rem;
 }
+.del-player {
+  flex: 0 0 auto; width: 44px; border: none; border-radius: 8px;
+  background: var(--panel-2); color: var(--bad); font-size: 1.05rem; cursor: pointer;
+}
+.del-player:active { transform: scale(0.95); }
 .data-buttons { display: flex; gap: 8px; }
 .data-buttons .btn { margin-top: 0; }
 
