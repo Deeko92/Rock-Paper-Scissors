@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <title>RPS Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>✊✋✌️ RPS Tracker</h1>
+  </header>
+
+  <main>
+    <section id="tab-play" class="tab-panel"></section>
+    <section id="tab-stats" class="tab-panel hidden"></section>
+    <section id="tab-history" class="tab-panel hidden"></section>
+  </main>
+
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-tab="play">▶️<span>Play</span></button>
+    <button class="tab-btn" data-tab="stats">📊<span>Stats</span></button>
+    <button class="tab-btn" data-tab="history">📜<span>History</span></button>
+  </nav>
+
+  <script src="js/storage.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

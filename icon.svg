@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#4f46e5"/>
+  <text x="50%" y="46%" font-size="150" text-anchor="middle" dominant-baseline="central">✊</text>
+  <text x="32%" y="72%" font-size="120" text-anchor="middle" dominant-baseline="central">✋</text>
+  <text x="68%" y="72%" font-size="120" text-anchor="middle" dominant-baseline="central">✌️</text>
+</svg>
