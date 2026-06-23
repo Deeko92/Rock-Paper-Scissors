@@ -9,6 +9,10 @@ const state = {
   game: null,        // in-progress game (from newGame)
   selA: null,        // currently selected throw for player A this round
   selB: null,
+  // History-screen state:
+  historyView: 'calendar', // 'calendar' | 'list'
+  calCursor: null,         // Date for the first of the month being viewed
+  selectedDay: null,       // 'YYYY-MM-DD' of the opened day, or null
 };
 
 // Default the two pickers to the first two players.
@@ -423,31 +427,193 @@ function renderHistory() {
   manage.appendChild(fileInput);
   panel.appendChild(manage);
 
-  // Games list
-  const games = state.data.games.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
-  const listCard = el('div', { class: 'card' }, [
-    el('h2', { text: `Game history (${games.length})` }),
-  ]);
-
-  if (games.length === 0) {
-    listCard.appendChild(el('div', { class: 'muted', text: 'No games recorded yet.' }));
-  } else {
-    games.forEach((g) => listCard.appendChild(historyItem(g)));
-    listCard.appendChild(
-      el('button', {
-        class: 'btn danger',
-        text: 'Clear all games',
-        onclick: () => {
-          if (confirm('Delete ALL recorded games? This cannot be undone (export first to keep a backup).')) {
-            state.data.games = [];
-            persist();
-            renderHistory();
-          }
-        },
-      })
-    );
+  // No games yet → nothing more to show.
+  if (state.data.games.length === 0) {
+    panel.appendChild(el('div', { class: 'card muted center' }, 'No games recorded yet. Play a game!'));
+    return;
   }
-  panel.appendChild(listCard);
+
+  // View toggle: calendar vs list.
+  const toggleCard = el('div', { class: 'card' }, [
+    el('div', { class: 'view-toggle' }, [
+      el('button', {
+        class: 'toggle-btn' + (state.historyView === 'calendar' ? ' active' : ''),
+        text: '📅 Calendar',
+        onclick: () => { state.historyView = 'calendar'; renderHistory(); },
+      }),
+      el('button', {
+        class: 'toggle-btn' + (state.historyView === 'list' ? ' active' : ''),
+        text: '📋 List',
+        onclick: () => { state.historyView = 'list'; renderHistory(); },
+      }),
+    ]),
+  ]);
+  panel.appendChild(toggleCard);
+
+  if (state.historyView === 'calendar') {
+    panel.appendChild(calendarCard());
+    const byDay = gamesByDay();
+    if (state.selectedDay && byDay[state.selectedDay]) {
+      panel.appendChild(dayDetailCard(state.selectedDay, byDay[state.selectedDay]));
+    }
+  } else {
+    panel.appendChild(listCard());
+  }
+}
+
+// All games for one calendar day, in time order.
+function gamesByDay() {
+  const map = {};
+  for (const g of state.data.games) {
+    const key = dateKey(new Date(g.date));
+    (map[key] = map[key] || []).push(g);
+  }
+  for (const k of Object.keys(map)) map[k].sort((a, b) => (a.date < b.date ? -1 : 1));
+  return map;
+}
+
+function dateKey(d) {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+// Stable per-player color so each player reads the same across the calendar.
+const PLAYER_PALETTE = ['#0ea5e9', '#f97316', '#a855f7', '#22c55e', '#eab308', '#ef4444', '#14b8a6', '#ec4899'];
+function playerColor(id) {
+  const idx = state.data.players.findIndex((p) => p.id === id);
+  return PLAYER_PALETTE[(idx < 0 ? 0 : idx) % PLAYER_PALETTE.length];
+}
+
+function listCard() {
+  const games = state.data.games.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+  const card = el('div', { class: 'card' }, [el('h2', { text: `Game history (${games.length})` })]);
+  games.forEach((g) => card.appendChild(historyItem(g)));
+  card.appendChild(
+    el('button', {
+      class: 'btn danger',
+      text: 'Clear all games',
+      onclick: () => {
+        if (confirm('Delete ALL recorded games? This cannot be undone (export first to keep a backup).')) {
+          state.data.games = [];
+          state.selectedDay = null;
+          persist();
+          renderHistory();
+        }
+      },
+    })
+  );
+  return card;
+}
+
+// Month grid; each day with games shows a colored dot per game (by winner) and
+// opens that day's games when tapped.
+function calendarCard() {
+  if (!state.calCursor) {
+    const now = new Date();
+    state.calCursor = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  const year = state.calCursor.getFullYear();
+  const month = state.calCursor.getMonth();
+  const byDay = gamesByDay();
+  const todayKey = dateKey(new Date());
+
+  const card = el('div', { class: 'card' });
+
+  const gotoMonth = (delta) => {
+    state.calCursor = new Date(year, month + delta, 1);
+    state.selectedDay = null;
+    renderHistory();
+  };
+  card.appendChild(
+    el('div', { class: 'cal-nav' }, [
+      el('button', { class: 'cal-arrow', text: '‹', onclick: () => gotoMonth(-1) }),
+      el('div', { class: 'cal-title', text: state.calCursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) }),
+      el('button', { class: 'cal-arrow', text: '›', onclick: () => gotoMonth(1) }),
+    ])
+  );
+
+  const dow = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  card.appendChild(el('div', { class: 'cal-grid cal-dow' }, dow.map((d) => el('div', { class: 'cal-dow-cell', text: d }))));
+
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(el('div', { class: 'cal-cell empty' }));
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dayGames = byDay[key] || [];
+    const classes = ['cal-cell'];
+    if (dayGames.length) classes.push('has-games');
+    if (key === todayKey) classes.push('today');
+    if (key === state.selectedDay) classes.push('selected');
+
+    const children = [el('div', { class: 'cal-day-num', text: String(d) })];
+    if (dayGames.length) {
+      const dots = el('div', { class: 'cal-dots' });
+      const cap = 4;
+      dayGames.slice(0, cap).forEach((g) =>
+        dots.appendChild(el('span', { class: 'cal-dot', style: `background:${playerColor(g.winnerId)}` }))
+      );
+      if (dayGames.length > cap) dots.appendChild(el('span', { class: 'cal-more', text: `+${dayGames.length - cap}` }));
+      children.push(dots);
+    }
+
+    const cell = el('div', { class: classes.join(' ') }, children);
+    if (dayGames.length) {
+      cell.addEventListener('click', () => {
+        state.selectedDay = state.selectedDay === key ? null : key;
+        renderHistory();
+      });
+    }
+    cells.push(cell);
+  }
+  card.appendChild(el('div', { class: 'cal-grid' }, cells));
+
+  // Color key, limited to players who have actually won games.
+  const winners = new Set(state.data.games.map((g) => g.winnerId));
+  const legendItems = state.data.players
+    .filter((p) => winners.has(p.id))
+    .map((p) =>
+      el('span', { class: 'cal-legend-item' }, [
+        el('span', { class: 'cal-dot', style: `background:${playerColor(p.id)}` }),
+        el('span', { text: p.name }),
+      ])
+    );
+  if (legendItems.length) card.appendChild(el('div', { class: 'cal-legend' }, legendItems));
+
+  return card;
+}
+
+// One opened day: each game with its round-by-round replay.
+function dayDetailCard(key, dayGames) {
+  const card = el('div', { class: 'card' });
+  const dateLabel = new Date(dayGames[0].date).toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  });
+  card.appendChild(
+    el('div', { class: 'day-detail-head' }, [
+      el('h2', { text: dateLabel }),
+      el('button', { class: 'day-close', text: '✕', title: 'Close', onclick: () => { state.selectedDay = null; renderHistory(); } }),
+    ])
+  );
+  card.appendChild(el('div', { class: 'muted', text: `${dayGames.length} game${dayGames.length === 1 ? '' : 's'} this day` }));
+
+  dayGames.forEach((g) => {
+    const ties = g.rounds.filter((r) => r.result === 'tie').length;
+    const time = new Date(g.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    card.appendChild(
+      el('div', { class: 'day-game' }, [
+        el('div', { class: 'day-game-head' }, [
+          el('span', { class: 'winner', text: '🏆 ' + playerName(g.winnerId) }),
+          el('span', { class: 'meta', text: `${time} · ${g.rounds.length} round${g.rounds.length === 1 ? '' : 's'} · ${ties} tie${ties === 1 ? '' : 's'}` }),
+        ]),
+        roundLog(g),
+      ])
+    );
+  });
+  return card;
 }
 
 function historyItem(g) {
