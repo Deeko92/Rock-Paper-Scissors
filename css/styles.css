@@ -140,15 +140,40 @@ main { padding: 8px 14px 24px; max-width: 640px; margin: 0 auto; }
 .history-item .throws { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
 .history-item .del { background: none; border: none; color: var(--bad); font-size: 1.1rem; cursor: pointer; }
 
-.name-edit-row { display: flex; gap: 8px; margin-bottom: 8px; }
-.name-edit-row input {
-  flex: 1; padding: 10px; border-radius: 8px; border: none; background: var(--panel-2); color: var(--text); font-size: 1rem;
+.name-edit-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.name-edit-row .name-input {
+  flex: 1; min-width: 70px; padding: 10px; border-radius: 8px; border: none;
+  background: var(--panel-2); color: var(--text); font-size: 1rem;
+}
+.emoji-select {
+  flex: 0 0 auto; width: 56px; padding: 9px 2px; border: none; border-radius: 8px;
+  background: var(--panel-2); color: var(--text); font-size: 1.15rem; text-align: center;
+}
+.color-input {
+  flex: 0 0 auto; width: 40px; height: 40px; min-width: 40px; padding: 2px;
+  border: none; border-radius: 8px; background: var(--panel-2); cursor: pointer;
 }
 .del-player {
-  flex: 0 0 auto; width: 44px; border: none; border-radius: 8px;
+  flex: 0 0 auto; width: 44px; height: 40px; border: none; border-radius: 8px;
   background: var(--panel-2); color: var(--bad); font-size: 1.05rem; cursor: pointer;
 }
 .del-player:active { transform: scale(0.95); }
+
+/* ---------- achievements ---------- */
+.ach-player { margin-top: 12px; }
+.ach-player:first-of-type { margin-top: 4px; }
+.ach-name { display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; }
+.ach-count { color: var(--muted); font-size: 0.8rem; font-weight: 400; }
+.ach-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.ach-chip {
+  background: var(--panel-2); border-radius: 999px; padding: 5px 11px; font-size: 0.8rem;
+  border: 1px solid rgba(148,163,184,0.15);
+}
+.ach-chip.locked { opacity: 0.35; }
+
+/* ---------- win taunt + confetti ---------- */
+.winner-banner .taunt { margin-top: 8px; font-style: italic; font-size: 0.95rem; }
+.confetti-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 100; }
 .data-buttons { display: flex; gap: 8px; }
 .data-buttons .btn { margin-top: 0; }
 

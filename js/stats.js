@@ -1,5 +1,48 @@
 // stats.js — derive every stat from the raw games array. Nothing is stored.
 
+// Achievement definitions. `earned(p, f)` gets a player stat (from
+// computeStats) and per-player game-derived flags. All derived, never stored.
+const ACHIEVEMENTS = [
+  { id: 'firstwin', emoji: '🎉', label: 'First Win', desc: 'Win your first game', earned: (p) => p.wins >= 1 },
+  { id: 'onfire', emoji: '🔥', label: 'On Fire', desc: 'Win 3 games in a row', earned: (p) => p.longestStreak >= 3 },
+  { id: 'unstoppable', emoji: '🌋', label: 'Unstoppable', desc: 'Win 5 games in a row', earned: (p) => p.longestStreak >= 5 },
+  { id: 'sharpshooter', emoji: '🎯', label: 'Sharpshooter', desc: '60%+ win rate (20+ games)', earned: (p) => p.gamesPlayed >= 20 && p.winPct >= 60 },
+  { id: 'centurion', emoji: '💯', label: 'Centurion', desc: 'Play 100 games', earned: (p) => p.gamesPlayed >= 100 },
+  { id: 'rock', emoji: '🪨', label: 'Rock Hound', desc: 'Throw rock 50 times', earned: (p) => p.throws.rock >= 50 },
+  { id: 'paper', emoji: '📄', label: 'Paper Pusher', desc: 'Throw paper 50 times', earned: (p) => p.throws.paper >= 50 },
+  { id: 'scissors', emoji: '✂️', label: 'Scissor Hands', desc: 'Throw scissors 50 times', earned: (p) => p.throws.scissors >= 50 },
+  { id: 'comeback', emoji: '🧗', label: 'Comeback', desc: 'Win a game with 3+ ties', earned: (p, f) => f.comeback },
+  { id: 'marathon', emoji: '🤝', label: 'Marathon', desc: 'Play a game with 5+ ties', earned: (p, f) => f.marathon },
+  { id: 'earlybird', emoji: '🌅', label: 'Early Bird', desc: 'Win a game before 9am', earned: (p, f) => f.earlyWin },
+  { id: 'nightowl', emoji: '🦉', label: 'Night Owl', desc: 'Win a game after 10pm', earned: (p, f) => f.nightWin },
+];
+
+// Returns { byPlayer: { id: [{id,emoji,label,desc,earned}] }, total }.
+function computeAchievements(data, statsResult) {
+  const flags = {};
+  for (const p of data.players) flags[p.id] = { comeback: false, marathon: false, earlyWin: false, nightWin: false };
+  for (const g of data.games) {
+    const ties = g.rounds.filter((r) => r.result === 'tie').length;
+    const hour = new Date(g.date).getHours();
+    for (const pid of g.playerIds) {
+      if (flags[pid] && ties >= 5) flags[pid].marathon = true;
+    }
+    if (g.winnerId && flags[g.winnerId]) {
+      if (ties >= 3) flags[g.winnerId].comeback = true;
+      if (hour < 9) flags[g.winnerId].earlyWin = true;
+      if (hour >= 22) flags[g.winnerId].nightWin = true;
+    }
+  }
+  const byPlayer = {};
+  for (const p of statsResult.playerList) {
+    const f = flags[p.id] || {};
+    byPlayer[p.id] = ACHIEVEMENTS.map((a) => ({
+      id: a.id, emoji: a.emoji, label: a.label, desc: a.desc, earned: !!a.earned(p, f),
+    }));
+  }
+  return { byPlayer, total: ACHIEVEMENTS.length };
+}
+
 function emptyThrowCounts() {
   return { rock: 0, paper: 0, scissors: 0 };
 }

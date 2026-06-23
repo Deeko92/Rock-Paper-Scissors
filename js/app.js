@@ -28,6 +28,114 @@ function playerName(id) {
   return p ? p.name : '(unknown)';
 }
 
+function playerEmoji(id) {
+  const p = state.data.players.find((x) => x.id === id);
+  return p && p.emoji ? p.emoji : '';
+}
+
+// "🦊 Chris" for display headers and banners.
+function playerLabel(id) {
+  const e = playerEmoji(id);
+  return (e ? e + ' ' : '') + playerName(id);
+}
+
+function getSetting(key) {
+  return state.data.settings ? state.data.settings[key] : undefined;
+}
+
+// Emoji choices for the per-player picker (superset of the defaults).
+const EMOJI_CHOICES = [
+  '🦊', '🐼', '🐯', '🐸', '🦁', '🐵', '🐺', '🦄', '🐶', '🐱', '🐮', '🐷',
+  '🐔', '🐧', '🦋', '🐙', '🦖', '🤖', '👽', '😎', '🔥', '⭐', '👑', '💎',
+];
+
+const TAUNTS = [
+  '{name} reigns supreme! 👑',
+  'Bow before {name}.',
+  '{name} called it.',
+  'Was that even close?',
+  '{name} is on another level.',
+  'Better luck next time!',
+  'GG — {name} takes it.',
+  'Textbook. {name} wins.',
+  '{name} reads minds, apparently.',
+  'Total domination by {name}.',
+];
+function randomTaunt(id) {
+  const t = TAUNTS[(Math.random() * TAUNTS.length) | 0];
+  return t.replace('{name}', playerName(id));
+}
+
+// Dependency-free confetti burst on a throwaway full-screen canvas.
+function launchConfetti() {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'confetti-canvas';
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const colors = ['#0ea5e9', '#f97316', '#a855f7', '#22c55e', '#eab308', '#ef4444', '#ec4899'];
+  const parts = [];
+  for (let i = 0; i < 130; i++) {
+    parts.push({
+      x: Math.random() * canvas.width,
+      y: -20 - Math.random() * canvas.height * 0.4,
+      r: 4 + Math.random() * 6,
+      c: colors[(Math.random() * colors.length) | 0],
+      vx: -2.5 + Math.random() * 5,
+      vy: 2 + Math.random() * 4,
+      rot: Math.random() * Math.PI,
+      vr: -0.2 + Math.random() * 0.4,
+    });
+  }
+  const start = performance.now();
+  const duration = 1800;
+  function frame(t) {
+    const elapsed = t - start;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of parts) {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * 0.6);
+      ctx.restore();
+    }
+    if (elapsed < duration) requestAnimationFrame(frame);
+    else canvas.remove();
+  }
+  requestAnimationFrame(frame);
+}
+
+// Short ascending victory chime via WebAudio (no asset files). Respects the
+// sound setting. The submit tap is the user gesture that unlocks audio.
+function playWinSound() {
+  if (!getSetting('sound')) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ac = new AC();
+    [523.25, 659.25, 783.99].forEach((freq, i) => {
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      gain.connect(ac.destination);
+      const t0 = ac.currentTime + i * 0.12;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.2, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25);
+      osc.start(t0);
+      osc.stop(t0 + 0.26);
+    });
+    setTimeout(() => ac.close(), 900);
+  } catch (e) {
+    /* audio not available — ignore */
+  }
+}
+
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
@@ -117,6 +225,8 @@ function submitRound() {
   if (state.game.over) {
     state.data.games.push(finalizeGame(state.game));
     persist();
+    launchConfetti();
+    playWinSound();
   }
   renderPlay();
 }
@@ -127,8 +237,8 @@ function renderPlay() {
   panel.innerHTML = '';
 
   const g = state.game;
-  const aName = playerName(state.aId);
-  const bName = playerName(state.bId);
+  const aName = playerLabel(state.aId);
+  const bName = playerLabel(state.bId);
 
   // Player pickers (only changeable before the game has any rounds).
   const pickerLocked = g.rounds.length > 0 && !g.over;
@@ -137,7 +247,7 @@ function renderPlay() {
       'select',
       { onchange: (e) => onChange(e.target.value), ...(pickerLocked ? { disabled: 'disabled' } : {}) },
       state.data.players.map((p) =>
-        el('option', { value: p.id, ...(p.id === cur ? { selected: 'selected' } : {}) }, p.name)
+        el('option', { value: p.id, ...(p.id === cur ? { selected: 'selected' } : {}) }, `${p.emoji ? p.emoji + ' ' : ''}${p.name}`)
       )
     );
 
@@ -161,12 +271,13 @@ function renderPlay() {
     card.appendChild(
       el('div', { class: 'winner-banner' }, [
         el('div', { text: '🏆 Winner' }),
-        el('div', { class: 'big', text: playerName(g.winnerId) }),
+        el('div', { class: 'big', text: playerLabel(g.winnerId) }),
         el('div', {
           class: 'muted',
           text: `${g.rounds.length} round${g.rounds.length === 1 ? '' : 's'}` +
             (ties ? ` · ${ties} tie${ties === 1 ? '' : 's'}` : ''),
         }),
+        el('div', { class: 'taunt', text: randomTaunt(g.winnerId) }),
       ])
     );
     card.appendChild(roundLog(g));
@@ -293,11 +404,43 @@ function renderStats() {
   // Head-to-head win record (two-player framing)
   panel.appendChild(headToHeadCard(s));
 
+  // Achievements
+  panel.appendChild(achievementsCard(s));
+
   // Per-player cards
   for (const p of s.playerList) {
     if (p.gamesPlayed === 0 && p.totalThrows === 0) continue;
     panel.appendChild(playerCard(p));
   }
+}
+
+function achievementsCard(s) {
+  const ach = computeAchievements(state.data, s);
+  const card = el('div', { class: 'card' }, [el('h2', { text: '🏅 Achievements' })]);
+  for (const p of s.playerList) {
+    if (p.gamesPlayed === 0 && p.totalThrows === 0) continue;
+    const list = ach.byPlayer[p.id] || [];
+    const earned = list.filter((a) => a.earned);
+    const locked = list.filter((a) => !a.earned);
+    const block = el('div', { class: 'ach-player' }, [
+      el('div', { class: 'ach-name' }, [
+        el('span', { text: `${playerEmoji(p.id) ? playerEmoji(p.id) + ' ' : ''}${p.name}` }),
+        el('span', { class: 'ach-count', text: `${earned.length}/${ach.total}` }),
+      ]),
+    ]);
+    block.appendChild(
+      earned.length
+        ? el('div', { class: 'ach-chips' }, earned.map((a) =>
+            el('span', { class: 'ach-chip', title: a.desc, text: `${a.emoji} ${a.label}` })))
+        : el('div', { class: 'muted', text: 'None yet — go win some games!' })
+    );
+    if (locked.length) {
+      block.appendChild(el('div', { class: 'ach-chips' }, locked.map((a) =>
+        el('span', { class: 'ach-chip locked', title: a.desc, text: `${a.emoji} ${a.label}` }))));
+    }
+    card.appendChild(block);
+  }
+  return card;
 }
 
 function statBox(num, lbl) {
@@ -318,13 +461,16 @@ function headToHeadCard(s) {
   const card = el('div', { class: 'card' }, [el('h2', { text: 'Win–Loss' })]);
   for (const p of s.playerList) {
     if (p.gamesPlayed === 0) continue;
-    card.appendChild(kv(p.name, `${p.wins}–${p.losses}  ·  ${p.winPct}%  ·  streak ${p.currentStreak} (best ${p.longestStreak})`));
+    const label = `${playerEmoji(p.id) ? playerEmoji(p.id) + ' ' : ''}${p.name}`;
+    card.appendChild(kv(label, `${p.wins}–${p.losses}  ·  ${p.winPct}%  ·  streak ${p.currentStreak} (best ${p.longestStreak})`));
   }
   return card;
 }
 
 function playerCard(p) {
-  const card = el('div', { class: 'card' }, [el('h2', { text: p.name })]);
+  const card = el('div', { class: 'card' }, [
+    el('h2', { text: `${playerEmoji(p.id) ? playerEmoji(p.id) + ' ' : ''}${p.name}` }),
+  ]);
 
   card.appendChild(
     el('div', { class: 'stat-grid' }, [
@@ -369,7 +515,23 @@ function renderHistory() {
   state.data.players.forEach((p) => {
     manage.appendChild(
       el('div', { class: 'name-edit-row' }, [
+        el('select', {
+          class: 'emoji-select',
+          title: 'Choose emoji',
+          onchange: (e) => { p.emoji = e.target.value; persist(); render(); },
+        }, EMOJI_CHOICES.map((em) =>
+          el('option', { value: em, ...(em === p.emoji ? { selected: 'selected' } : {}) }, em)
+        )),
         el('input', {
+          type: 'color',
+          class: 'color-input',
+          value: p.color || '#0ea5e9',
+          title: 'Player color',
+          oninput: (e) => { p.color = e.target.value; },
+          onchange: (e) => { p.color = e.target.value; persist(); render(); },
+        }),
+        el('input', {
+          class: 'name-input',
           value: p.name,
           maxlength: '24',
           oninput: (e) => {
@@ -396,6 +558,19 @@ function renderHistory() {
       text: '+ Add player',
       onclick: () => {
         state.data.players.push({ id: genId(), name: 'Player ' + (state.data.players.length + 1) });
+        persist();
+        renderHistory();
+      },
+    })
+  );
+
+  manage.appendChild(el('h3', { text: 'Options' }));
+  manage.appendChild(
+    el('button', {
+      class: 'btn secondary',
+      text: `${getSetting('sound') ? '🔊' : '🔇'} Win sound: ${getSetting('sound') ? 'On' : 'Off'}`,
+      onclick: () => {
+        state.data.settings.sound = !getSetting('sound');
         persist();
         renderHistory();
       },
@@ -484,10 +659,12 @@ function dateKey(d) {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-// Stable per-player color so each player reads the same across the calendar.
+// Per-player color: their chosen color, falling back to a palette by index.
 const PLAYER_PALETTE = ['#0ea5e9', '#f97316', '#a855f7', '#22c55e', '#eab308', '#ef4444', '#14b8a6', '#ec4899'];
 function playerColor(id) {
-  const idx = state.data.players.findIndex((p) => p.id === id);
+  const p = state.data.players.find((x) => x.id === id);
+  if (p && p.color) return p.color;
+  const idx = state.data.players.findIndex((x) => x.id === id);
   return PLAYER_PALETTE[(idx < 0 ? 0 : idx) % PLAYER_PALETTE.length];
 }
 
@@ -614,7 +791,7 @@ function calendarCard() {
     .map((p) =>
       el('span', { class: 'cal-legend-item' }, [
         el('span', { class: 'cal-dot', style: `background:${playerColor(p.id)}` }),
-        el('span', { text: p.name }),
+        el('span', { text: `${p.emoji ? p.emoji + ' ' : ''}${p.name}` }),
       ])
     );
   if (legendItems.length) card.appendChild(el('div', { class: 'cal-legend' }, legendItems));
@@ -642,7 +819,7 @@ function dayDetailCard(key, dayGames) {
     card.appendChild(
       el('div', { class: 'day-game' }, [
         el('div', { class: 'day-game-head' }, [
-          el('span', { class: 'winner', text: '🏆 ' + playerName(g.winnerId) }),
+          el('span', { class: 'winner', text: '🏆 ' + playerLabel(g.winnerId) }),
           el('span', { class: 'meta', text: `${time} · ${g.rounds.length} round${g.rounds.length === 1 ? '' : 's'} · ${ties} tie${ties === 1 ? '' : 's'}` }),
         ]),
         roundLog(g),
@@ -663,7 +840,7 @@ function historyItem(g) {
 
   return el('div', { class: 'history-item' }, [
     el('div', { class: 'row1' }, [
-      el('span', { class: 'winner', text: '🏆 ' + playerName(g.winnerId) }),
+      el('span', { class: 'winner', text: '🏆 ' + playerLabel(g.winnerId) }),
       el('button', {
         class: 'del',
         text: '🗑',
